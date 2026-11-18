@@ -1,0 +1,70 @@
+name: Build AERA Recovery for Galaxy A51
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build Type (eng/userdebug)'
+        required: true
+        default: 'eng'
+
+env:
+  DEVICE_CODENAME: a51
+  DEVICE_TREE_URL: "https://github.com/xizyv/device_samsung_a51_recovery"
+  DEVICE_TREE_BRANCH: "android-12.1"
+  
+  RECOVERY_MANIFEST: "https://github.com/AERA-Recovery/manifest"
+  RECOVERY_BRANCH: "main" 
+  
+  BUILD_TARGET: "recoveryimage"
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Maximize build space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setting up environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git-core gnupg flex bison gperf build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig python3 python3-pip openjdk-17-jdk repo bc
+          git config --global user.name "AERA Builder"
+          git config --global user.email "builder@aera-project.com"
+
+      - name: Initialize Repo & Sync AERA
+        run: |
+          mkdir workspace
+          cd workspace
+          repo init -u ${{ env.RECOVERY_MANIFEST }} -b ${{ env.RECOVERY_BRANCH }} --depth=1
+          repo sync -j$(nproc --all) --force-sync --no-tags --no-clone-bundle --prune
+
+      - name: Clone Adapted Device Tree
+        run: |
+          cd workspace
+          git clone ${{ env.DEVICE_TREE_URL }} -b ${{ env.DEVICE_TREE_BRANCH }} device/samsung/${{ env.DEVICE_CODENAME }}
+
+      - name: Building AERA Recovery
+        run: |
+          cd workspace
+          export ALLOW_MISSING_DEPENDENCIES=true
+          source build/envsetup.sh
+          
+          lunch aera_${{ env.DEVICE_CODENAME }}-${{ github.event.inputs.build_type }}
+          
+          mka ${{ env.BUILD_TARGET }} -j$(nproc --all)
+
+      - name: Upload Recovery Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: AERA_Recovery_SM-A515F
+          path: |
+            workspace/out/target/product/${{ env.DEVICE_CODENAME }}/recovery.img
+          if-no-files-found: error
