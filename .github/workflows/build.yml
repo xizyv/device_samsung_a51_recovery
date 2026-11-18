@@ -13,8 +13,13 @@ env:
   DEVICE_TREE_URL: "https://github.com/xizyv/device_samsung_a51_recovery"
   DEVICE_TREE_BRANCH: "android-12.1"
   
-  RECOVERY_MANIFEST: "https://github.com/AERA-Recovery/manifest"
-  RECOVERY_BRANCH: "main" 
+  # Используем публичный манифест TWRP
+  RECOVERY_MANIFEST: "https://github.com/TeamWin/manifest.git"
+  RECOVERY_BRANCH: "android-12.1"
+  
+  # Репозиторий AERA для подмены
+  AERA_RECOVERY_URL: "https://github.com/AERA-Recovery/android_bootable_recovery"
+  AERA_RECOVERY_BRANCH: "aera-16.0"
   
   BUILD_TARGET: "recoveryimage"
 
@@ -39,12 +44,18 @@ jobs:
           git config --global user.name "AERA Builder"
           git config --global user.email "builder@aera-project.com"
 
-      - name: Initialize Repo & Sync AERA
+      - name: Initialize Repo & Sync TWRP base
         run: |
           mkdir workspace
           cd workspace
           repo init -u ${{ env.RECOVERY_MANIFEST }} -b ${{ env.RECOVERY_BRANCH }} --depth=1
           repo sync -j$(nproc --all) --force-sync --no-tags --no-clone-bundle --prune
+
+      - name: Replace bootable/recovery with AERA
+        run: |
+          cd workspace
+          rm -rf bootable/recovery
+          git clone ${{ env.AERA_RECOVERY_URL }} -b ${{ env.AERA_RECOVERY_BRANCH }} --depth=1 bootable/recovery
 
       - name: Clone Adapted Device Tree
         run: |
